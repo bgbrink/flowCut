@@ -49,7 +49,7 @@ flowCut <- function(f, Segment = 500, Channels = NULL, Directory = NULL, FileID 
     }
 
     if (nrow(f) <= 3 * Segment) {
-        # deGate requires count.lim = 3
+        # deGate requires min_events = 3
         message("Either your Segment size is too large or your number", " of cells is too small.")
         resTable["Has the file passed", ] <- paste0("Either your", "Segment size is too large or your number of cells is too small.")
         return(list(frame = f, ind = NULL, data = resTable, worstChan = NULL))
@@ -258,9 +258,9 @@ flowCut <- function(f, Segment = 500, Channels = NULL, Directory = NULL, FileID 
                 if (PrintToConsole == FALSE)
                   {
                     if (UseCairo == TRUE) {
-                      CairoPNG(pngMono, width = 800, height = 600)
+                      Cairo::CairoPNG(pngMono, width = 400, height = 300)
                     } else {
-                      png(pngMono, width = 800, height = 600)
+                      png(pngMono, width = 400, height = 300)
                     }
                   }  # else print to console with default settings
 
@@ -584,6 +584,7 @@ flowCut <- function(f, Segment = 500, Channels = NULL, Directory = NULL, FileID 
     names.worschan <- parameters(f)$name[worstChan]
     names(names.worschan) <- NULL
     resTable["Worst channel", ] <- names.worschan
+    names(worstChan) <- names.worschan
     if (resTable["Max of % of range of means divided by range of data", ] >= MaxOfMeans) {
         if (Verbose == TRUE) {
             message("The file has been flagged. The max ranged means differ ", "more than ",
@@ -683,9 +684,9 @@ flowCut <- function(f, Segment = 500, Channels = NULL, Directory = NULL, FileID 
 
         if (PrintToConsole == FALSE) {
             if (UseCairo == TRUE) {
-                CairoPNG(filename = pngName, width = (z1) * 600, height = z2 * 600)
+                Cairo::CairoPNG(filename = pngName, width = (z1) * 300, height = z2 * 300)
             } else {
-                png(filename = pngName, width = (z1) * 600, height = z2 * 600)
+                png(filename = pngName, width = (z1) * 300, height = z2 * 300)
             }
             par(mfrow = c(z2, z1), mar = c(7, 7, 4, 2), mgp = c(4, 1.5, 0), oma = c(0,
                 0, 5, 0))
@@ -697,7 +698,7 @@ flowCut <- function(f, Segment = 500, Channels = NULL, Directory = NULL, FileID 
         }
 
         for (x in CleanChan.loc) {
-            plotDensWrapper(f.org, c(Time.loc, x), cex.main = cex.size, cex.lab = cex.size,
+            cytapexHelpers::plot_dens_wrapper(f.org, c(Time.loc, x), cex.main = cex.size, cex.lab = cex.size,
                 cex.axis = cex.size, main = paste0(round(meanRangePerc1[x], digits = 3),
                   " / ", round(meanRangePerc2[x], digits = 3), " (", round(max(maxDistJumped[x]),
                     digits = 3), ")", asterisks[x]))
@@ -718,7 +719,7 @@ flowCut <- function(f, Segment = 500, Channels = NULL, Directory = NULL, FileID 
         }
         x <- worstChan
 
-        plotDensWrapper(f.org, c(Time.loc, x), cex.main = cex.size, cex.lab = cex.size,
+        cytapexHelpers::plot_dens_wrapper(f.org, c(Time.loc, x), cex.main = cex.size, cex.lab = cex.size,
             cex.axis = cex.size, main = paste0("Worst Channel without indices removed"))
 
         temp <- density(cellDelete2, adjust = 1)
@@ -982,7 +983,7 @@ calcMeansAndSegmentsRemoved <- function(f, Segment, CleanChan.loc, FirstOrSecond
             temp <- exprs(f)[Segment * (k - 1) + (seq_len(Segment)), c(j)]
             segSummary[k, ] <- c(quantile(temp, probs = c(5, 20, 50, 80, 95)/100),
                 mean(temp), sapply(2:3, function(x) {
-                  moment(temp, order = x, center = TRUE)
+                  e1071::moment(temp, order = x, center = TRUE)
                 }))
         }
         # Calculating the eight features for the last segment and store them in the
@@ -991,7 +992,7 @@ calcMeansAndSegmentsRemoved <- function(f, Segment, CleanChan.loc, FirstOrSecond
         temp <- exprs(f)[(Segment * (k - 1) + 1):nrow(exprs(f)), c(j)]
         segSummary[k, ] <- c(quantile(temp, probs = c(5, 20, 50, 80, 95)/100), mean(temp),
             sapply(2:3, function(x) {
-                moment(temp, order = x, center = TRUE)
+                e1071::moment(temp, order = x, center = TRUE)
             }))
 
         storeMeans[[j]] <- segSummary[, 6]
@@ -1080,7 +1081,7 @@ calcMeansAndSegmentsRemoved <- function(f, Segment, CleanChan.loc, FirstOrSecond
             # Finding outliers by plotting density of the 8 measures, the index of
             # cells that have 8 measures significantly different than the rest will be
             # returned
-            peaks_info <- getPeaks(cellDelete2, tinypeak.removal = 0.1)
+            peaks_info <- cytapexHelpers::get_peaks(cellDelete2, tinypeak_removal = 0.1)
             peaks_xind <- peaks_info$Peaks
             peaks_value <- which(density(cellDelete2)$x %in% peaks_xind)
             peaks_value <- density(cellDelete2)$y[peaks_value]
@@ -1093,8 +1094,8 @@ calcMeansAndSegmentsRemoved <- function(f, Segment, CleanChan.loc, FirstOrSecond
             cellDelete2 <- cellDelete2[which(cellDelete2 <= (mean(cellDelete2) +
                 5 * sd(cellDelete2)))]
 
-            all_cut <- deGate(cellDelete2, tinypeak.removal = 0.001, all.cuts = TRUE,
-                upper = TRUE, verbose = FALSE, count.lim = 3)
+            all_cut <- cytapexHelpers::dens_gate(cellDelete2, tinypeak_removal = 0.001, all_cuts = TRUE,
+                upper = TRUE, verbose = FALSE, min_events = 3)
 
             if (!anyNA(all_cut)) {
                 # We need to set a limit on peaks because we don't want to overcut
@@ -1128,19 +1129,19 @@ calcMeansAndSegmentsRemoved <- function(f, Segment, CleanChan.loc, FirstOrSecond
                 densityGateLine <- mean(density(cellDelete2)$x)/20
             } else {
                 if (length(peaks_xind) == 1) {
-                  upper_cut <- deGate(cellDelete2, tinypeak.removal = 0.1, upper = TRUE,
-                    use.upper = TRUE, alpha = 0.1, percentile = 0.95, verbose = FALSE,
-                    count.lim = 3)
+                  upper_cut <- cytapexHelpers::dens_gate(cellDelete2, tinypeak_removal = 0.1, upper = TRUE,
+                    use_upper = TRUE, alpha = 0.1, percentile = 0.95, verbose = FALSE,
+                    min_events = 3)
                   if (!is.na(upper_cut)) {
                     # We don't want the upper cut and the all cut to be the same because that means
                     # we are cutting at the 95 percentile
                     if (length(all_cut) == 1 && upper_cut == all_cut) {
-                      upper_cut <- deGate(cellDelete2, tinypeak.removal = 0.1, upper = TRUE,
-                        use.upper = TRUE, alpha = 0.05, verbose = FALSE, count.lim = 3)
+                      upper_cut <- cytapexHelpers::dens_gate(cellDelete2, tinypeak_removal = 0.1, upper = TRUE,
+                        use_upper = TRUE, alpha = 0.05, verbose = FALSE, min_events = 3)
                       if (upper_cut == all_cut) {
-                        upper_cut <- deGate(cellDelete2, tinypeak.removal = 0.1,
-                          upper = TRUE, use.upper = TRUE, alpha = 0.01, verbose = FALSE,
-                          count.lim = 3)
+                        upper_cut <- cytapexHelpers::dens_gate(cellDelete2, tinypeak_removal = 0.1,
+                          upper = TRUE, use_upper = TRUE, alpha = 0.01, verbose = FALSE,
+                          min_events = 3)
                       }
                     }
                   }
@@ -1290,50 +1291,3 @@ TimePrint <- function(startTime) {
     format(.POSIXct(difft, tz = "GMT"), "%H:%M:%S")
 }
 
-plotDensWrapper <- function(ff, channels, main="", xlim, ylim, cex.axis=2, cex.lab=2, cex.main=2){
-  if (nrow(ff) == 0) {
-    labels <- make_labels(ff, channels[1], channels[2])
-    plot(-1000, -1000, main=main, xlab=labels[1], ylab=labels[2], xlim=xlim, ylim=ylim, cex.axis=cex.axis, cex.lab=cex.lab, cex.main=cex.main) # -1000 to be off the plot window
-
-  } else if (nrow(ff) < 10) {
-    if (missing(xlim))
-      xlim <- range(ff@exprs[, channels[1]], na.rm = T)
-    if (missing(ylim))
-      ylim <- range(ff@exprs[, channels[2]], na.rm = T)
-
-    f.data <- pData(parameters(ff))
-    f.col.names <- flowCore::colnames(ff)
-    names(channels) <- f.col.names[channels]
-    xlab <- paste("<", names(channels)[1], ">:", f.data$desc[which(f.col.names ==
-                                                                     names(channels)[1])], sep = "")
-    ylab <- paste("<", names(channels)[2], ">:", f.data$desc[which(f.col.names ==
-                                                                     names(channels)[2])], sep = "")
-
-    scattermore::scattermoreplot(x = ff@exprs[,channels[1]], y = ff@exprs[,channels[2]], xlim = xlim, ylim = ylim, col = "black",
-                                 cex.axis=cex.axis, cex.lab=cex.lab, cex.main=cex.main, main=main, xlab = xlab, ylab = ylab, cex = 0)
-    } else {
-      if (missing(xlim))
-        xlim <- range(ff@exprs[, channels[1]], na.rm = T)
-      if (missing(ylim))
-        ylim <- range(ff@exprs[, channels[2]], na.rm = T)
-
-      f.data <- pData(parameters(ff))
-      f.col.names <- flowCore::colnames(ff)
-      names(channels) <- f.col.names[channels]
-      xlab <- paste("<", names(channels)[1], ">:", f.data$desc[which(f.col.names ==
-                                                                       names(channels)[1])], sep = "")
-      ylab <- paste("<", names(channels)[2], ">:", f.data$desc[which(f.col.names ==
-                                                                       names(channels)[2])], sep = "")
-
-
-      colPalette <- colorRampPalette(c("blue", "turquoise", "green", "yellow", "orange", "red"))
-      col <- densCols(ff@exprs[, channels], colramp = colPalette)
-      # bwidth <- diff(apply(ff@exprs[, channels], 2, stats::quantile, probs = c(0.05, 0.95), na.rm = TRUE, names = FALSE))/15
-      # col <- densCols(ff@exprs[, channels], colramp = colPalette, nbin = 100, bandwidth = bwidth)
-
-      scattermore::scattermoreplot(x = ff@exprs[,channels[1]], y = ff@exprs[,channels[2]], xlim = xlim, ylim = ylim, col = col,
-                                   cex.axis=cex.axis, cex.lab=cex.lab, cex.main=cex.main, main=main, xlab = xlab, ylab = ylab, cex = 0)
-      # plotDens(obj = ff, channels = channels,xlim = xlim, ylim = ylim,
-      #                 cex.axis=cex.axis, cex.lab=cex.lab, cex.main=cex.main, main=main, pch = NULL)
-    }
-}
